@@ -23,9 +23,36 @@ function statusLabel(active: "green" | "blue" | "grey"): string {
 function NavigatorOperatorFleetList(props: {
   onGo2OperatorHoverChange?: (hovered: boolean) => void;
   prependedOperators?: PolarisOperatorFleetEntry[];
+  hideDemoFleet?: boolean;
 }): React.ReactElement {
-  const { onGo2OperatorHoverChange, prependedOperators = [] } = props;
-  const roster = [...prependedOperators, ...POLARIS_OPERATOR_FLEET];
+  const {
+    onGo2OperatorHoverChange,
+    prependedOperators = [],
+    hideDemoFleet = false,
+  } = props;
+  const roster = hideDemoFleet
+    ? prependedOperators
+    : [...prependedOperators, ...POLARIS_OPERATOR_FLEET];
+
+  // Empty state — no live operator and no deployed entries from create flow.
+  // Show a clean prompt to add one instead of the demo placeholder fleet.
+  if (roster.length === 0) {
+    return (
+      <div className="polaris-nav-operators-empty">
+        <p className="polaris-nav-operators-empty-title">No operators connected</p>
+        <p className="polaris-nav-operators-empty-sub">
+          Plug a Go2 in via Ethernet, or set up a fresh operator from the Polaris
+          shell.
+        </p>
+        <a
+          className="polaris-nav-operators-empty-cta"
+          href="/polaris/create"
+        >
+          Add operator
+        </a>
+      </div>
+    );
+  }
   return (
     <div className="polaris-nav-operators-embed-shell">
       <ul
@@ -124,6 +151,18 @@ function NavigatorOperatorFleetList(props: {
                     <span className="polaris-operator-card-meta-label">Mission</span>{" "}
                     <span className="polaris-operator-card-meta-value">{op.task}</span>
                   </p>
+                  {op.batteryPercent !== undefined ? (
+                    <p className="polaris-operator-card-sub polaris-operator-card-meta polaris-operator-card-meta--battery">
+                      <span className="polaris-operator-card-meta-label">
+                        Battery
+                      </span>{" "}
+                      <span className="polaris-operator-card-meta-value">
+                        {op.batteryPercent === null
+                          ? "—"
+                          : `${op.batteryPercent}%`}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
               </article>
             </li>
@@ -139,6 +178,8 @@ export type NavigatorOperatorFleetProps = {
   onGo2OperatorHoverChange?: (hovered: boolean) => void;
   /** Operators from a completed create flow; listed above the demo fleet. */
   prependedOperators?: PolarisOperatorFleetEntry[];
+  /** When a real robot is connected, suppress the static demo fleet so only live operators show. */
+  hideDemoFleet?: boolean;
 };
 
 /**
@@ -147,7 +188,7 @@ export type NavigatorOperatorFleetProps = {
 export function NavigatorOperatorFleet(
   props: NavigatorOperatorFleetProps,
 ): React.ReactElement {
-  const { onGo2OperatorHoverChange, prependedOperators } = props;
+  const { onGo2OperatorHoverChange, prependedOperators, hideDemoFleet } = props;
   const [extended, setExtended] = useState(false);
   const titleId = useId();
   const collapseButtonRef = useRef<HTMLButtonElement>(null);
@@ -221,6 +262,7 @@ export function NavigatorOperatorFleet(
         title="Operators"
       >
         <NavigatorOperatorFleetList
+          hideDemoFleet={hideDemoFleet}
           onGo2OperatorHoverChange={onGo2OperatorHoverChange}
           prependedOperators={prependedOperators}
         />

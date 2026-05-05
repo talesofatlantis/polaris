@@ -71,6 +71,7 @@ const emptyState: AppState = {
   dimos_rerun_web_viewer_url: null,
   openai_configured: true,
   connected: false,
+  battery_percent: null,
   robot_pose: null,
   path: [],
   pov: {

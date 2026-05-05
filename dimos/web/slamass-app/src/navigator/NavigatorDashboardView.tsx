@@ -3,13 +3,14 @@ import React, {
   startTransition,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 
 import { AgentToolsModal } from "../AgentToolsModal";
 import { LiveFeedPanel, type LiveFeedPanelHandle } from "../LiveFeedPanel";
-import { MapPane } from "../MapPane";
+import { MapPane, type MapAdditionalRobotMarker } from "../MapPane";
 import { NAVIGATOR_MAP_VIEWPORT_ANCHOR_Y } from "../mapViewport";
 import {
   buildFleetEntryFromDeploy,
@@ -21,8 +22,15 @@ import {
   takePolarisDeployPendingPayload,
   writePolarisDeployHydratedFleetJson,
 } from "../polarisDeploySession";
+import {
+  POLARIS_GO2_PREVIEW_URL,
+  POLARIS_OPERATOR_SELECT_THUMB_URL,
+} from "../polarisAssets";
 import type { PolarisOperatorFleetEntry } from "../polarisOperatorFleet";
-import { defaultRobotOperatorHoverCard } from "../robotOperatorLabel";
+import {
+  defaultRobotOperatorHoverCard,
+  robotOperatorHoverCardFromPolarisFleetEntry,
+} from "../robotOperatorLabel";
 import { OperatorRail, SelectedSemanticPreview } from "../OperatorRail";
 import { PanelShell } from "../PanelShell";
 import { SettingsCogGlyphs } from "../SettingsCogGlyphs";
@@ -45,6 +53,7 @@ import { fetchJson } from "./fetchJson";
 import { NavigatorMapControlsHover } from "./NavigatorMapControlsHover";
 import { NavigatorOperatorFleet } from "./NavigatorOperatorFleet";
 import { NavigatorOptionCard } from "./NavigatorOptionCard";
+import { NavigatorTeleopPanel } from "./NavigatorTeleopPanel";
 import type { ActivityEntry } from "./useNavigatorSlamassState";
 import { useNavigatorSlamassState } from "./useNavigatorSlamassState";
 
@@ -233,6 +242,66 @@ export function NavigatorDashboardView(
     }
     return null;
   }, [selectedPoi, selectedYoloObject, state.ui.selected_item]);
+
+  /**
+   * Fallback mock costmap — matches the visual style of the saved sim costmap
+   * (irregular slate-100 blob with darker observed patches on a white field).
+   * Anchored to a fixed world origin so `MapPane`'s structure key stays stable
+   * across robot-pose updates (otherwise the fade-in keeps resetting and the
+   * canvas stays at opacity 0). Real costmap deltas from slamass replace this
+   * as soon as they arrive.
+   *
+   * The 118 × 113 grid + 0.15 m resolution + (-8.85, -5.25) origin mirror the
+   * dimensions of the sim's saved map so the bounded shape lands naturally
+   * inside the navigator's viewport at default zoom.
+   */
+  const FALLBACK_MAP = useMemo(
+    () => ({
+      map_id: "fallback",
+      // Real saved costmap PNG captured from the dimos `--replay` session
+      // (122 × 127 cells @ 0.075 m). Embedded below as base64 so the navigator
+      // panel always shows the same visual style as the original sim view,
+      // regardless of whether the live perception pipeline has produced a
+      // fresh costmap yet.
+      //
+      // The recorded origin was (-2.775, 0.3); we re-anchor the placeholder
+      // so the world origin (0, 0) sits in the middle of the map — a real
+      // Go2 typically boots near (0, 0), so this keeps it visible and lets
+      // the live pose marker walk a sensible distance before reaching the
+      // placeholder's edge. As the robot moves, its `state.robot_pose`
+      // updates the marker on this fixed canvas.
+      resolution: 0.075,
+      origin_x: -((122 * 0.075) / 2),
+      origin_y: -((127 * 0.075) / 2),
+      width: 122,
+      height: 127,
+      updated_at: new Date(0).toISOString(),
+      image_version: 0,
+      image_url:
+        "data:image/png;base64,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1uVPT09Nz1/T+nq0fn2QbOmO2Vz0lBU0AAQS0AAQSEADQKBd/35/C8r7QaftZV1qPX/vueyyg3748aPr87cqO+jzcz9ySdbeJyBd674Ba89Bj9ZZW0EDQCABDQCBBDQABDIHvTG1jqz3Xtzl43V279M5b4v37zxrd86jf/+soAEgkIAGgEACGgAC6aA3Zm7n07szWruDKq3d+Zbn733/afqq7Q2/9vtpa2rv5+PxODl+fXmZdb60f396s4IGgEACGgACCWgACKRg2Zh//PN+stn0xeXl5OO9555LvffebX2+3l9Pb2WHWdsL/OrqanL88fq6+zXx+1rff2WHWv48Ms+nw+2uM8oKGgACCWgACCSgASDQrn+/P4LyftFz9e6ge98/uvX5e59vLnPPY9FBn9beOmkraAAIJKABIJCABoBAu/p9/h7M7aR7d7St96feWiddzjE/PT01PV4nTZK9dbzprKABIJCABoBAAhoAAukbGrV2vKfudE49F106dQfcey776fFxcvxYHC99fliTDjqLFTQABBLQABBIQANAoA9rX8DWlB1N2fnurcNZuoP9+uXzu69n78691jmX1t7bGxiXFTQABBLQABBIQANAoF31pdSdeo76+vp6cvyh2Nu61vn3Vrvei4vp/2lvD4emx5fMRbOmvf3NzNZYQQNAIAENAIEENAAEMgfNqsrOuebUnXTp9fV1cly7v/XDjx+T47e3k14uTOict8UKGgACCWgACCSgASCQDjpc7451tA6qdyfdurd4yd7cQC9W0AAQSEADQCABDQCBdNAVOuD3lV/Pt+9/TV6vWqdbmyNeW+167L0NLMUKGgACCWgACCSgASCQDrqzvc3Blp1zqfZ66GQB/p4VNAAEEtAAEEhAA0AgHfRMrXPA5ce/fvm86v2N52rdu7rWOW9tTrz29evYgT9lBQ0AgQQ0AAQS0AAQaFN93xpaO+FaB7t251zreNOuZ66tdfqwpK39jcfeWUEDQCABDQCBBDQABNJHVKR3mDqlvtK/32Qrfx7T3k/+vdgWK2gACCSgASCQgAaAQPbirujd2aR1UsCf0+myJCtoAAgkoAEgkIAGgED6E1iRv0nIMvrfnOjMt8UKGgACCWgACCSgASCQOWhYUevezWn38yabznnbrKABIJCABoBAAhoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgD/wLVtkvnbRmK44AAAAASUVORK5CYII=",
+    }),
+    [],
+  );
+
+  const effectiveMapState = state.map ?? FALLBACK_MAP;
+
+  const mapAdditionalRobotMarkers = useMemo((): MapAdditionalRobotMarker[] | undefined => {
+    // When a real robot is connected, the live `state.robot_pose` already
+    // drives the primary robot marker — additional fleet markers (left over
+    // from a Create-Operator demo flow stashed in localStorage) would render
+    // as ghost duplicates. Suppress them so the map shows exactly one robot.
+    if (state.connected) {
+      return undefined;
+    }
+    if (deployedOperators.length === 0) {
+      return undefined;
+    }
+    return deployedOperators.map((entry, index) => ({
+      id: entry.id,
+      card: robotOperatorHoverCardFromPolarisFleetEntry(entry),
+      deployPop: robotMarkerDeployPop && index === 0,
+    }));
+  }, [state.connected, deployedOperators, robotMarkerDeployPop]);
 
   const loadAgentTools = useCallback(async () => {
     setAgentToolsLoading(true);
@@ -594,9 +663,29 @@ export function NavigatorDashboardView(
             <div className="polaris-navigator-operations-column polaris-navigator-map">
               <div className="polaris-navigator-operations-inner polaris-navigator-operations-body">
                 <NavigatorOperatorFleet
+                  hideDemoFleet
                   onGo2OperatorHoverChange={setGo2OperatorFleetHover}
-                  prependedOperators={deployedOperators}
+                  prependedOperators={
+                    state.connected
+                      ? [
+                          {
+                            id: "live-go2",
+                            title: "Unitree Go2",
+                            category: { label: "Type", value: "Unitree Go2" },
+                            location: "Live link",
+                            task: "Awaiting command",
+                            batteryPercent: state.battery_percent,
+                            active: "green",
+                            imageUrl: POLARIS_GO2_PREVIEW_URL,
+                            imageAlt: "Connected Unitree Go2",
+                            mountThumbUrl: POLARIS_OPERATOR_SELECT_THUMB_URL,
+                          },
+                        ]
+                      : []
+                  }
                 />
+
+                <NavigatorTeleopPanel connected={state.connected} />
 
                 <NavigatorOptionCard
                   bodyVariant="scroll"
@@ -647,11 +736,11 @@ export function NavigatorDashboardView(
               title="Navigator"
             >
               <MapPane
+                additionalRobotMarkers={mapAdditionalRobotMarkers}
                 layers={state.layers}
-                map={state.map}
+                map={effectiveMapState}
                 operatorFleetGo2Hover={go2OperatorFleetHover}
                 pinViewModeControlsBottom
-                robotMarkerDeployPop={robotMarkerDeployPop}
                 refitOnLayoutReady
                 viewportScreenAnchorY={NAVIGATOR_MAP_VIEWPORT_ANCHOR_Y}
                 robotOperatorHoverCard={defaultRobotOperatorHoverCard("navigator")}
@@ -735,7 +824,6 @@ export function NavigatorDashboardView(
                 embedded
                 frameLabel=""
                 onCaptureAvailabilityChange={setCameraHeaderCaptureEnabled}
-                placeholder
                 poseLabel={null}
                 pov={state.pov}
               />

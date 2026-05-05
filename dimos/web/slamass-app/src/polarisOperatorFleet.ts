@@ -12,6 +12,8 @@ export type PolarisOperatorFleetEntry = {
   category?: { label: string; value: string };
   location: string;
   task: string;
+  /** Optional live battery state-of-charge (0–100). Null/undefined → render as "—". */
+  batteryPercent?: number | null;
   imageUrl: string | null;
   imageAlt: string;
   active?: "green" | "blue" | "grey";

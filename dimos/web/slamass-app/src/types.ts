@@ -161,6 +161,8 @@ export interface AppState {
   /** When false, VLM features use fallbacks: Inspect still saves a POI from the camera; agent chat uses a stub backend. */
   openai_configured: boolean;
   connected: boolean;
+  /** Battery state-of-charge from the Go2 (0–100). Null until firmware reports a recognised field. */
+  battery_percent: number | null;
   robot_pose: RobotPose | null;
   path: Array<[number, number]>;
   pov: PovState;

@@ -1,4 +1,4 @@
-import type { AppState, MapState, UiCameraState } from "./types";
+import type { AppState, MapState, RobotPose, UiCameraState } from "./types";
 
 /** Below 1 shows more map (zoomed out); above 1 magnifies. */
 export const MIN_MAP_ZOOM = 0.25;
@@ -50,6 +50,48 @@ export function getMapCenter(map: MapState): [number, number] {
     map.origin_x + (map.width * map.resolution) / 2,
     map.origin_y + (map.height * map.resolution) / 2,
   ];
+}
+
+/** Keep synthetic markers slightly inside the costmap so they stay visible after zoom/pan. */
+export function clampWorldToMapBounds(map: MapState, x: number, y: number): [number, number] {
+  const pad = map.resolution * 6;
+  const minX = map.origin_x + pad;
+  const maxX = map.origin_x + map.width * map.resolution - pad;
+  const minY = map.origin_y + pad;
+  const maxY = map.origin_y + map.height * map.resolution - pad;
+  if (minX >= maxX || minY >= maxY) {
+    const [cx, cy] = getMapCenter(map);
+    return [cx, cy];
+  }
+  return [
+    Math.min(Math.max(x, minX), maxX),
+    Math.min(Math.max(y, minY), maxY),
+  ];
+}
+
+/**
+ * World pose for an extra operator marker (e.g. newly deployed). Offsets from the live robot when
+ * available; otherwise from map center.
+ */
+export function worldPositionForAdditionalOperator(
+  map: MapState,
+  robotPose: RobotPose | null,
+  index: number,
+): [number, number] {
+  const [cx, cy] = getMapCenter(map);
+  if (robotPose) {
+    const baseAngle = robotPose.yaw + Math.PI / 2;
+    const angle = baseAngle + index * 0.52;
+    const dist = 1.05 + index * 0.42;
+    return clampWorldToMapBounds(
+      map,
+      robotPose.x + Math.cos(angle) * dist,
+      robotPose.y + Math.sin(angle) * dist,
+    );
+  }
+  const ox = 1.0 + index * 0.35;
+  const oy = 0.55 + index * 0.22;
+  return clampWorldToMapBounds(map, cx + ox, cy + oy);
 }
 
 /** Same framing as POST /api/ui/focus-map: map center + overview zoom. */

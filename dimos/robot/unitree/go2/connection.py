@@ -312,6 +312,16 @@ class GO2Connection(Module, spec.Camera, spec.Pointcloud):
         """Make the robot lie down."""
         return self.connection.liedown()
 
+    @skill
+    def get_battery_percent(self) -> str:
+        """Return the latest battery state-of-charge (0–100) reported by the Go2.
+
+        Returns "unknown" if no recognised battery field has been seen yet on
+        the subscribed telemetry topics.
+        """
+        pct = self.connection.latest_battery_percent
+        return f"{pct}" if pct is not None else "unknown"
+
     @rpc
     def publish_request(self, topic: str, data: dict[str, Any]) -> dict[Any, Any]:
         """Publish a request to the WebRTC connection.
@@ -331,6 +341,45 @@ class GO2Connection(Module, spec.Camera, spec.Pointcloud):
         Returns None if no frame has been captured yet.
         """
         return self._latest_video_frame
+
+    @skill
+    def set_obstacle_avoidance(self, enabled: bool) -> str:
+        """Enable or disable the Go2's onboard obstacle-avoidance reflex.
+
+        DimOS plans paths against its own costmap, but the Go2's stock obstacle
+        avoidance acts as a hardware-level safety net. Disable only when you need
+        the robot to traverse spaces it would otherwise reject (very tight
+        passes, calibration, etc.).
+
+        Args:
+            enabled: True to turn the reflex on, False to turn it off.
+        """
+        self.connection.set_obstacle_avoidance(enabled=enabled)
+        return f"Obstacle avoidance {'on' if enabled else 'off'}"
+
+    @skill
+    def set_searchlight(self, enabled: bool) -> str:
+        """Toggle the front-facing white VUI light (searchlight) on or off.
+
+        On the Unitree Go2 the front module's user-interface (VUI) panel doubles as a
+        forward-facing searchlight. Setting `enabled=True` publishes a long-duration
+        white VUI command (300 s); `enabled=False` publishes a 0 s white command which
+        the firmware treats as an immediate cancel.
+
+        Args:
+            enabled: True to turn the light on, False to turn it off.
+        """
+        from unitree_webrtc_connect.constants import VUI_COLOR  # type: ignore[import-untyped]
+
+        payload = {
+            "api_id": 1001,
+            "parameter": {
+                "color": VUI_COLOR.WHITE,
+                "time": 300 if enabled else 0,
+            },
+        }
+        self.connection.publish_request("rt/api/vui/request", payload)
+        return f"Searchlight {'on' if enabled else 'off'}"
 
 
 go2_connection = GO2Connection.blueprint

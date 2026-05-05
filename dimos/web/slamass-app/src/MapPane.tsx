@@ -13,9 +13,11 @@ import {
   MIN_MAP_ZOOM,
   panCamera,
   screenToWorld,
+  worldPositionForAdditionalOperator,
   worldToImagePixels,
   zoomCameraAtScreenPoint,
   type BuildViewportOptions,
+  type MapViewport,
 } from "./mapViewport";
 import { refFromPoi, refFromYoloObject, semanticKey } from "./semanticItems";
 import type { RobotOperatorHoverCard } from "./robotOperatorLabel";
@@ -82,6 +84,124 @@ function isInsideMapFrame(
   );
 }
 
+export type MapAdditionalRobotMarker = {
+  id: string;
+  card: RobotOperatorHoverCard;
+  /** One-shot emphasis (e.g. right after create flow). */
+  deployPop?: boolean;
+};
+
+function RobotOperatorMarkerView(props: {
+  map: MapState;
+  viewport: MapViewport;
+  worldX: number;
+  worldY: number;
+  card: RobotOperatorHoverCard;
+  operatorFleetGo2Hover?: boolean;
+  deployPop?: boolean;
+  gamecardDomId: string;
+  /** 0 = primary live robot; higher draws above siblings. */
+  stackIndex: number;
+  onPointerDownStop: (event: React.SyntheticEvent) => void;
+}): React.ReactElement {
+  const {
+    map,
+    viewport,
+    worldX,
+    worldY,
+    card,
+    operatorFleetGo2Hover = false,
+    deployPop = false,
+    gamecardDomId,
+    stackIndex,
+    onPointerDownStop,
+  } = props;
+  const [robotX, robotY] = worldToImagePixels(map, viewport, worldX, worldY);
+  const statusLabel =
+    card.active === "blue"
+      ? "Standby"
+      : card.active === "grey"
+        ? "Inactive"
+        : card.active === "green"
+          ? "Active"
+          : undefined;
+  return (
+    <div
+      aria-describedby={gamecardDomId}
+      aria-label={`Robot — ${card.instanceName}`}
+      className={[
+        "robot-marker",
+        operatorFleetGo2Hover ? "robot-marker--fleet-hover" : "",
+        deployPop ? "robot-marker--deploy-pop" : "",
+        stackIndex > 0 ? "robot-marker--additional" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onPointerDown={onPointerDownStop}
+      style={{
+        left: `${robotX}px`,
+        top: `${robotY}px`,
+        transform: "translate(-50%, -50%)",
+        zIndex: 3 + stackIndex,
+      }}
+      tabIndex={0}
+    >
+      <span className="robot-marker-pulse-ring robot-marker-pulse-ring--1" />
+      <span className="robot-marker-pulse-ring robot-marker-pulse-ring--2" />
+      <div className="robot-marker-disc" />
+      <div className="robot-marker-gamecard" id={gamecardDomId} role="tooltip">
+        <div className="robot-marker-gamecard-media">
+          <img
+            alt={card.imageAlt}
+            className="robot-marker-gamecard-img"
+            decoding="async"
+            draggable={false}
+            src={card.imageUrl}
+          />
+        </div>
+        <div className="robot-marker-gamecard-body">
+          <div className="robot-marker-gamecard-title-row">
+            <span className="robot-marker-gamecard-title">{card.instanceName}</span>
+            {card.active ? (
+              <span
+                aria-label={statusLabel}
+                className="robot-marker-gamecard-status"
+                role="status"
+              >
+                <span
+                  aria-hidden
+                  className={`robot-marker-gamecard-dot robot-marker-gamecard-dot--${card.active}`}
+                />
+              </span>
+            ) : null}
+          </div>
+          {card.modelTitle ? (
+            <p className="robot-marker-gamecard-model">{card.modelTitle}</p>
+          ) : null}
+          {card.typeLine ? (
+            <p className="robot-marker-gamecard-meta">
+              <span className="robot-marker-gamecard-meta-label">Type</span>{" "}
+              <span className="robot-marker-gamecard-meta-value">{card.typeLine}</span>
+            </p>
+          ) : null}
+          {card.location ? (
+            <p className="robot-marker-gamecard-meta">
+              <span className="robot-marker-gamecard-meta-label">Location</span>{" "}
+              <span className="robot-marker-gamecard-meta-value">{card.location}</span>
+            </p>
+          ) : null}
+          {card.task ? (
+            <p className="robot-marker-gamecard-meta">
+              <span className="robot-marker-gamecard-meta-label">Task</span>{" "}
+              <span className="robot-marker-gamecard-meta-value">{card.task}</span>
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type MapPaneProps = {
   map: MapState | null;
   robotPose: RobotPose | null;
@@ -127,9 +247,10 @@ type MapPaneProps = {
    */
   operatorFleetGo2Hover?: boolean;
   /**
-   * One-shot emphasis after deploy from create flow: marker pops and the operator gamecard is visible.
+   * Extra operators on the map (e.g. newly deployed from create flow), placed near the live robot or
+   * map center.
    */
-  robotMarkerDeployPop?: boolean;
+  additionalRobotMarkers?: MapAdditionalRobotMarker[];
 };
 
 type DragState = {
@@ -166,7 +287,7 @@ export function MapPane(props: MapPaneProps): React.ReactElement {
     viewportScreenAnchorX,
     viewportScreenAnchorY,
     operatorFleetGo2Hover = false,
-    robotMarkerDeployPop = false,
+    additionalRobotMarkers,
   } = props;
 
   const viewportBuildOptions = React.useMemo((): BuildViewportOptions => {
@@ -311,6 +432,15 @@ export function MapPane(props: MapPaneProps): React.ReactElement {
   const stopEvent = React.useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation();
   }, []);
+
+  const additionalMarkerWorldPositions = React.useMemo(() => {
+    if (!map || !additionalRobotMarkers?.length) {
+      return [];
+    }
+    return additionalRobotMarkers.map((_, index) =>
+      worldPositionForAdditionalOperator(map, robotPose, index),
+    );
+  }, [additionalRobotMarkers, map, robotPose]);
 
   const showFloatingZoomFit = Boolean(map && viewport);
 
@@ -704,101 +834,42 @@ export function MapPane(props: MapPaneProps): React.ReactElement {
                 height: "100%",
               }}
             >
-            {robotPose && (() => {
-              const [robotX, robotY] = worldToImagePixels(map, viewport, robotPose.x, robotPose.y);
-              const card = robotOperatorHoverCard;
-              const statusLabel =
-                card.active === "blue"
-                  ? "Standby"
-                  : card.active === "grey"
-                    ? "Inactive"
-                    : card.active === "green"
-                      ? "Active"
-                      : undefined;
+            {robotPose ? (
+              <RobotOperatorMarkerView
+                card={robotOperatorHoverCard}
+                deployPop={false}
+                gamecardDomId="map-robot-operator-gamecard"
+                map={map}
+                onPointerDownStop={stopEvent}
+                operatorFleetGo2Hover={operatorFleetGo2Hover}
+                stackIndex={0}
+                viewport={viewport}
+                worldX={robotPose.x}
+                worldY={robotPose.y}
+              />
+            ) : null}
+            {additionalRobotMarkers?.map((marker, index) => {
+              const pos = additionalMarkerWorldPositions[index];
+              if (!pos) {
+                return null;
+              }
+              const [wx, wy] = pos;
+              const safeId = marker.id.replace(/[^a-zA-Z0-9_-]/g, "_");
               return (
-                <div
-                  aria-describedby="map-robot-operator-gamecard"
-                  aria-label={`Robot — ${card.instanceName}`}
-                  className={[
-                    "robot-marker",
-                    operatorFleetGo2Hover ? "robot-marker--fleet-hover" : "",
-                    robotMarkerDeployPop ? "robot-marker--deploy-pop" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onPointerDown={stopEvent}
-                  style={{
-                    left: `${robotX}px`,
-                    top: `${robotY}px`,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                  tabIndex={0}
-                >
-                  <span className="robot-marker-pulse-ring robot-marker-pulse-ring--1" />
-                  <span className="robot-marker-pulse-ring robot-marker-pulse-ring--2" />
-                  <div className="robot-marker-disc" />
-                  <div
-                    className="robot-marker-gamecard"
-                    id="map-robot-operator-gamecard"
-                    role="tooltip"
-                  >
-                    <div className="robot-marker-gamecard-media">
-                      <img
-                        alt={card.imageAlt}
-                        className="robot-marker-gamecard-img"
-                        decoding="async"
-                        draggable={false}
-                        src={card.imageUrl}
-                      />
-                    </div>
-                    <div className="robot-marker-gamecard-body">
-                      <div className="robot-marker-gamecard-title-row">
-                        <span className="robot-marker-gamecard-title">
-                          {card.instanceName}
-                        </span>
-                        {card.active ? (
-                          <span
-                            aria-label={statusLabel}
-                            className="robot-marker-gamecard-status"
-                            role="status"
-                          >
-                            <span
-                              aria-hidden
-                              className={`robot-marker-gamecard-dot robot-marker-gamecard-dot--${card.active}`}
-                            />
-                          </span>
-                        ) : null}
-                      </div>
-                      {card.modelTitle ? (
-                        <p className="robot-marker-gamecard-model">{card.modelTitle}</p>
-                      ) : null}
-                      {card.typeLine ? (
-                        <p className="robot-marker-gamecard-meta">
-                          <span className="robot-marker-gamecard-meta-label">Type</span>{" "}
-                          <span className="robot-marker-gamecard-meta-value">
-                            {card.typeLine}
-                          </span>
-                        </p>
-                      ) : null}
-                      {card.location ? (
-                        <p className="robot-marker-gamecard-meta">
-                          <span className="robot-marker-gamecard-meta-label">Location</span>{" "}
-                          <span className="robot-marker-gamecard-meta-value">
-                            {card.location}
-                          </span>
-                        </p>
-                      ) : null}
-                      {card.task ? (
-                        <p className="robot-marker-gamecard-meta">
-                          <span className="robot-marker-gamecard-meta-label">Task</span>{" "}
-                          <span className="robot-marker-gamecard-meta-value">{card.task}</span>
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
+                <RobotOperatorMarkerView
+                  key={marker.id}
+                  card={marker.card}
+                  deployPop={marker.deployPop === true}
+                  gamecardDomId={`map-robot-operator-gamecard-${safeId}`}
+                  map={map}
+                  onPointerDownStop={stopEvent}
+                  stackIndex={1 + index}
+                  viewport={viewport}
+                  worldX={wx}
+                  worldY={wy}
+                />
               );
-            })()}
+            })}
             {layers.show_pois &&
               activePois.map((poi) => {
                 const [x, y] = worldToImagePixels(map, viewport, poi.target_x, poi.target_y);

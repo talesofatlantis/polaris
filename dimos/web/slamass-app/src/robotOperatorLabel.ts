@@ -1,4 +1,5 @@
 import { POLARIS_GO2_PREVIEW_URL } from "./polarisAssets";
+import type { PolarisOperatorFleetEntry } from "./polarisOperatorFleet";
 
 /**
  * Label for the map robot marker hover card. Set `VITE_ROBOT_OPERATOR_LABEL` in `.env`
@@ -31,6 +32,21 @@ export type RobotOperatorHoverCard = {
  * Default hover card matching the first Polaris operator row (Go2). Optional
  * `VITE_ROBOT_OPERATOR_IMAGE_URL` overrides the preview image.
  */
+/** Map marker card from a navigator / operators fleet row (e.g. after create flow). */
+export function robotOperatorHoverCardFromPolarisFleetEntry(
+  entry: PolarisOperatorFleetEntry,
+): RobotOperatorHoverCard {
+  return {
+    instanceName: entry.title,
+    typeLine: entry.category?.value,
+    location: entry.location,
+    task: entry.task,
+    imageUrl: entry.imageUrl ?? POLARIS_GO2_PREVIEW_URL,
+    imageAlt: entry.imageAlt,
+    active: entry.active,
+  };
+}
+
 export function defaultRobotOperatorHoverCard(
   preset: "slamass" | "navigator",
 ): RobotOperatorHoverCard {

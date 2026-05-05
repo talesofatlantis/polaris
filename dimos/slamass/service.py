@@ -354,6 +354,18 @@ class ChatSubmitRequest(BaseModel):
     message: str
 
 
+class SearchlightRequest(BaseModel):
+    enabled: bool
+
+
+class ObstacleAvoidanceRequest(BaseModel):
+    enabled: bool
+
+
+class SportCommandRequest(BaseModel):
+    command: str
+
+
 class McpToolClient:
     def __init__(self, mcp_url: str) -> None:
         self.mcp_url = mcp_url
@@ -950,6 +962,9 @@ class SlamassService:
         self.pov_seq: int = 0
         self.pov_updated_at: str | None = None
         self.connected: bool = False
+        # Battery state-of-charge (0–100) reported by the Go2; None until the
+        # robot publishes a recognised battery field on a subscribed topic.
+        self.battery_percent: int | None = None
         self.inspection_state: dict[str, Any] = {
             "status": "idle",
             "message": "",
@@ -972,6 +987,7 @@ class SlamassService:
         self._tasks = [
             asyncio.create_task(self._pov_loop()),
             asyncio.create_task(self._checkpoint_loop()),
+            asyncio.create_task(self._battery_loop()),
         ]
 
     async def stop(self) -> None:
@@ -1022,6 +1038,7 @@ class SlamassService:
         async with self._state_lock:
             return {
                 "connected": self.connected,
+                "battery_percent": self.battery_percent,
                 "robot_pose": self._serialize_pose(self.robot_pose),
                 "path": self.path,
                 "pov": {
@@ -2224,6 +2241,32 @@ class SlamassService:
             except Exception:
                 logger.exception("Periodic SLAMASS map checkpoint failed")
 
+    async def _battery_loop(self) -> None:
+        """Poll the GO2Connection's `get_battery_percent` skill every few seconds.
+
+        The Go2 publishes battery state on its WebRTC datachannel — the dimos
+        connection caches the latest value, and this loop reads it through MCP
+        so the slamass UI state reflects it. If the firmware never publishes a
+        recognised battery field, `battery_percent` stays None and the UI shows
+        a dash.
+        """
+        while not self._stopped:
+            await asyncio.sleep(5.0)
+            try:
+                text = await self.mcp_client.call_tool_text("get_battery_percent")
+            except Exception:
+                continue
+            stripped = text.strip()
+            if not stripped or stripped.lower() == "unknown":
+                continue
+            try:
+                pct = int(stripped)
+            except ValueError:
+                continue
+            if 0 <= pct <= 100 and pct != self.battery_percent:
+                self.battery_percent = pct
+                await self.publish_event("battery_updated", {"battery_percent": pct})
+
     async def _finish_poi_navigation(
         self,
         *,
@@ -2357,6 +2400,7 @@ class SlamassService:
         async with self._state_lock:
             return {
                 "connected": self.connected,
+                "battery_percent": self.battery_percent,
                 "robot_pose": self._serialize_pose(self.robot_pose),
                 "path": self.path,
                 "pov": {
@@ -3160,6 +3204,44 @@ def create_app(
     @app.post("/api/teleop/stop")
     async def post_teleop_stop() -> dict[str, Any]:
         return await slamass.stop_motion()
+
+    @app.post("/api/explore/start")
+    async def post_explore_start() -> dict[str, Any]:
+        try:
+            text = await slamass.mcp_client.call_tool_text("begin_exploration")
+        except Exception as exc:  # noqa: BLE001 - surface to client
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ok": True, "result": text}
+
+    @app.post("/api/explore/stop")
+    async def post_explore_stop() -> dict[str, Any]:
+        try:
+            text = await slamass.mcp_client.call_tool_text("end_exploration")
+        except Exception as exc:  # noqa: BLE001 - surface to client
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ok": True, "result": text}
+
+    @app.post("/api/obstacle-avoidance")
+    async def post_obstacle_avoidance(
+        request: ObstacleAvoidanceRequest,
+    ) -> dict[str, Any]:
+        try:
+            text = await slamass.mcp_client.call_tool_text(
+                "set_obstacle_avoidance", {"enabled": request.enabled}
+            )
+        except Exception as exc:  # noqa: BLE001 - surface to client
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ok": True, "enabled": request.enabled, "result": text}
+
+    @app.post("/api/searchlight")
+    async def post_searchlight(request: SearchlightRequest) -> dict[str, Any]:
+        try:
+            text = await slamass.mcp_client.call_tool_text(
+                "set_searchlight", {"enabled": request.enabled}
+            )
+        except Exception as exc:  # noqa: BLE001 - surface to client
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ok": True, "enabled": request.enabled, "result": text}
 
     @app.post("/api/system/stop")
     async def post_system_stop() -> dict[str, Any]:

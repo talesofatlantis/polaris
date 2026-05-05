@@ -81,6 +81,10 @@ class UnitreeWebRTCConnection(Resource):
         self.mode = mode
         self.stop_timer: threading.Timer | None = None
         self.cmd_vel_timeout = 0.2
+        # Latest battery state-of-charge from the Go2 (0–100). None until the
+        # firmware first publishes a recognised battery field on one of the
+        # subscribed telemetry topics.
+        self._latest_battery_percent: int | None = None
         self.conn = LegionConnection(WebRTCConnectionMethod.LocalSTA, ip=self.ip)
         self.connect()
 
@@ -202,6 +206,61 @@ class UnitreeWebRTCConnection(Resource):
         except Exception as e:
             print(f"Failed to send movement command: {e}")
             return False
+
+    @staticmethod
+    def _extract_battery_percent(payload: Any) -> int | None:
+        """Best-effort extraction of battery % from a Unitree telemetry payload.
+
+        Different firmware versions use different field names — this walks the
+        common ones and returns the first plausible 0–100 integer it finds.
+        """
+        if payload is None:
+            return None
+        # The Go2 datachannel typically wraps the message in {"data": <inner>}.
+        inner = payload
+        if isinstance(payload, dict) and "data" in payload and isinstance(
+            payload.get("data"), (dict, list)
+        ):
+            inner = payload["data"]
+
+        candidates: list[Any] = []
+        if isinstance(inner, dict):
+            for key in (
+                "soc",
+                "SOC",
+                "battery_remain",
+                "battery_status",
+                "battery_percent",
+                "battery",
+            ):
+                if key in inner:
+                    candidates.append(inner[key])
+            bms = inner.get("bms_state") if isinstance(inner, dict) else None
+            if isinstance(bms, dict):
+                for key in ("soc", "SOC", "battery_remain"):
+                    if key in bms:
+                        candidates.append(bms[key])
+
+        for value in candidates:
+            try:
+                pct = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= pct <= 100:
+                return pct
+        return None
+
+    def _on_battery_telemetry(self, message: Any) -> None:
+        try:
+            pct = self._extract_battery_percent(message)
+        except Exception:
+            pct = None
+        if pct is not None:
+            self._latest_battery_percent = pct
+
+    @property
+    def latest_battery_percent(self) -> int | None:
+        return self._latest_battery_percent
 
     # Generic conversion of unitree subscription to Subject (used for all subs)
     def unitree_sub_stream(self, topic_name: str):  # type: ignore[no-untyped-def]

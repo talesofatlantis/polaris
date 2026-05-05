@@ -1,6 +1,9 @@
 import React from "react";
 
-import { CameraIcon } from "@heroicons/react/24/outline";
+import {
+  CameraIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 
 import { ChatPanel } from "./ChatPanel";
 import {
@@ -217,71 +220,78 @@ export function OperatorRail(props: OperatorRailProps): React.ReactElement {
               const isYolo = item.kind === "yolo_object";
               const isSelected =
                 selectedItem?.kind === item.kind && selectedItem?.entity_id === item.entity_id;
-              const metaBits = isYolo
-                ? `${item.subtitle} confidence`
-                : (item.subtitle || "Landmark").trim() || "Landmark";
               const sourceLabel = isYolo ? "YOLO" : "VLM";
+              const operatorName = "Unitree Go2";
+              const action = isYolo
+                ? `tagged a ${item.title.toLowerCase()}`
+                : "took a new snapshot";
+              const coords = `(${item.world_x.toFixed(2)}, ${item.world_y.toFixed(2)})`;
               return (
                 <li key={`${item.kind}:${item.entity_id}`}>
-                  <article
+                  <button
+                    aria-pressed={isSelected}
                     className={[
-                      "polaris-detection-activity-entry",
-                      isSelected ? "polaris-detection-activity-entry--selected" : "",
+                      "polaris-snapshot-alert",
+                      isSelected ? "polaris-snapshot-alert--selected" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    onClick={() =>
+                      onSelectItem({ kind: item.kind, entity_id: item.entity_id })
+                    }
+                    type="button"
                   >
-                    <div
-                      aria-hidden
+                    <span
                       className={[
-                        "polaris-detection-activity-avatar",
+                        "polaris-snapshot-alert-avatar",
                         isYolo
-                          ? "polaris-detection-activity-avatar--yolo"
-                          : "polaris-detection-activity-avatar--vlm",
+                          ? "polaris-snapshot-alert-avatar--yolo"
+                          : "polaris-snapshot-alert-avatar--vlm",
                       ].join(" ")}
                     >
-                      <CameraIcon
-                        aria-hidden
-                        className="polaris-detection-activity-camera-icon"
-                      />
-                    </div>
-                    <button
-                      className="polaris-detection-activity-main"
-                      onClick={() => onSelectItem({ kind: item.kind, entity_id: item.entity_id })}
-                      type="button"
-                    >
-                      <div className="polaris-detection-activity-headline">
-                        <strong>{item.title}</strong>
-                        <span className="polaris-detection-activity-sep">·</span>
-                        <span className="polaris-detection-activity-rel">
+                      {item.thumbnail_url ? (
+                        <img
+                          alt=""
+                          className="polaris-snapshot-alert-avatar-img"
+                          decoding="async"
+                          src={item.thumbnail_url}
+                        />
+                      ) : (
+                        <CameraIcon
+                          aria-hidden
+                          className="polaris-snapshot-alert-avatar-fallback"
+                        />
+                      )}
+                    </span>
+                    <span className="polaris-snapshot-alert-body">
+                      <span className="polaris-snapshot-alert-title">
+                        <strong>{operatorName}</strong> {action} for a POI{" "}
+                        <span className="polaris-snapshot-alert-coords">@ {coords}</span>
+                      </span>
+                      <span className="polaris-snapshot-alert-desc">
+                        <span className="polaris-snapshot-alert-source">{sourceLabel}</span>
+                        <span className="polaris-snapshot-alert-dot" aria-hidden>
+                          ·
+                        </span>
+                        <span className="polaris-snapshot-alert-rel">
                           {formatRelativeDetectionTime(item.updated_at)}
                         </span>
-                      </div>
-                      <p className="polaris-detection-activity-desc">
-                        <span className="polaris-detection-activity-link">{sourceLabel}</span>
-                        {" · "}
-                        {metaBits}
-                        {item.summary ? (
-                          <>
-                            {" — "}
-                            {item.summary}
-                          </>
-                        ) : null}
-                        {" Map position "}
-                        <span className="polaris-detection-activity-coords">
-                          ({item.world_x.toFixed(2)}, {item.world_y.toFixed(2)})
+                        <span className="polaris-snapshot-alert-dot" aria-hidden>
+                          ·
                         </span>
-                        {" at "}
                         <time
-                          className="polaris-detection-activity-abs"
+                          className="polaris-snapshot-alert-abs"
                           dateTime={item.updated_at}
                         >
                           {formatDetectionAbsDetail(item.updated_at)}
                         </time>
-                        .
-                      </p>
-                    </button>
-                  </article>
+                      </span>
+                    </span>
+                    <InformationCircleIcon
+                      aria-hidden
+                      className="polaris-snapshot-alert-icon"
+                    />
+                  </button>
                 </li>
               );
             })}

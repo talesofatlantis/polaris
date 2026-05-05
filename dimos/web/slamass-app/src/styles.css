@@ -1225,6 +1225,10 @@ img {
   outline: none;
 }
 
+.robot-marker.robot-marker--additional {
+  z-index: 4;
+}
+
 .robot-marker:focus-visible {
   outline: none;
 }

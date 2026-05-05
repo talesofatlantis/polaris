@@ -1978,7 +1978,7 @@
 
 @media (min-width: 960px) {
   .polaris-navigator-main-split {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr) minmax(0, 0.95fr);
+    grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.65fr) minmax(0, 1.08fr);
     /* Grow with flex parent so map + columns fill remaining dvh */
     min-height: 0;
     flex: 1 1 auto;
@@ -2130,15 +2130,32 @@
   overflow: hidden;
 }
 
-/* Embedded POV: fixed landscape frame (don’t stretch to fill column height). */
+/* Embedded POV: strict 16∶9 landscape frame, never letterboxed/squished by parent.
+ * Width fills the column; height is purely a function of width × 9/16 — no max-height
+ * cap (which caused subtle non-16∶9 ratios at narrow viewport widths where the cap kicked in). */
 .polaris-navigator-detections-column .polaris-nav-pov-stage {
   flex: 0 0 auto;
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
   min-height: 0;
-  max-height: min(42vh, 520px);
   align-self: stretch;
+}
+
+/* The camera tile body should hug the 16∶9 stage (no extra vertical space pulling the ratio off). */
+.polaris-navigator-detections-column
+  .polaris-nav-detections-camera-card
+  .polaris-nav-option-card-body {
+  align-items: stretch;
+}
+
+/* Belt-and-braces: image inside the stage fills it exactly. */
+.polaris-navigator-detections-column .polaris-nav-pov-stage > .pov-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .polaris-navigator-map .polaris-navigator-operations-body {
@@ -2153,11 +2170,11 @@
   padding-inline: var(--map-panel-inline);
 }
 
-/* Left stack: same idea as camera + detections — fixed first block, Orchestrator fills remaining row height */
+/* Left stack: Operators (auto) + Teleop (auto) + Orchestrator (fills remaining row) */
 .polaris-navigator-map .polaris-navigator-operations-inner.polaris-navigator-operations-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   align-content: start;
   /* No extra inset — workspace + grid gap handle rhythm; avoids Operators sitting lower than Navigator/Camera */
   padding-block: 0;
@@ -2167,7 +2184,7 @@
 
 @media (min-width: 960px) {
   .polaris-navigator-map .polaris-navigator-operations-inner.polaris-navigator-operations-body {
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     align-content: stretch;
     align-items: stretch;
     overflow: hidden;
@@ -2247,7 +2264,9 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 1.45rem;
+  /* Match the 0.75rem padding of each .polaris-snapshot-alert so the gap
+   * between cards equals the inner padding to the card border. */
+  gap: 0.75rem;
 }
 
 .polaris-detection-activity-entry {
@@ -3670,6 +3689,32 @@
   transform: translateZ(0);
 }
 
+/* Zoom overflow guard — when the user zooms in, the map-rendered-stack and
+ * its raster grow beyond the navigator panel. Clip the panel body so the
+ * raster never escapes upward into the panel header (or sideways into the
+ * sibling columns). The hover cards (`.poi-pin-gamecard` / `.robot-marker-
+ * gamecard`) are siblings rendered at higher z-indexes inside the stack —
+ * those still need to escape, so we clip on the panel-shell body, not on
+ * `.map-surface` itself. */
+.polaris-navigator-map .panel-shell .panel-body-stage {
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+/* Robot pose disc — a touch more saturated and a darker outline so the marker
+ * stays visible on the white mock map (was nearly invisible on plain white). */
+.polaris-navigator-map .robot-marker-disc {
+  background: #2563eb;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    0 0 0 3px rgba(37, 99, 235, 0.5),
+    0 4px 10px rgba(15, 23, 42, 0.18);
+}
+
+.polaris-navigator-map .robot-marker-pulse-ring {
+  border-color: rgba(37, 99, 235, 0.45);
+}
+
 .polaris-navigator-map .map-chrome {
   color: var(--text-soft);
 }
@@ -4026,4 +4071,851 @@
 
 .polaris-navigator-map .panel-empty h3 {
   color: var(--text);
+}
+
+/* ----------------------------------------------------------------------------
+ * POI / YOLO detail modal — Polaris navigator styling
+ *
+ * Base styles in styles.css render the modal in the dark dashboard chrome
+ * (navy fill, amber pills, white-on-dark text). When opened from the Polaris
+ * navigator we want the same airy light-tile aesthetic as the surrounding
+ * Operators / Camera cards: white surface, slate text, soft shadow, slate-100
+ * borders, and amber-on-paper accents.
+ * -------------------------------------------------------------------------- */
+.polaris-navigator-root .poi-modal-backdrop {
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(10px);
+}
+
+.polaris-navigator-root .poi-modal {
+  border-radius: 1rem;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.85) inset,
+    0 24px 60px rgba(15, 23, 42, 0.18);
+  color: #334155;
+}
+
+.polaris-navigator-root .poi-modal-media {
+  background: var(--polaris-operator-visual-bg, #f1f5f9);
+  border-right: 0.5px solid rgba(15, 23, 42, 0.1);
+}
+
+.polaris-navigator-root .poi-modal-body {
+  gap: 1rem;
+  padding: 1.4rem 1.5rem 1.5rem;
+}
+
+.polaris-navigator-root .poi-modal-body .eyebrow {
+  color: #94a3b8;
+  letter-spacing: 0.14em;
+}
+
+.polaris-navigator-root .poi-modal h3 {
+  color: #0f172a;
+  font-size: 1.375rem;
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.polaris-navigator-root .poi-summary {
+  color: #475569;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.polaris-navigator-root .poi-meta {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.polaris-navigator-root .poi-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  color: #64748b;
+}
+
+.polaris-navigator-root .poi-tags span {
+  min-height: 28px;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.03);
+  color: #475569;
+  font-size: 0.75rem;
+  letter-spacing: 0.005em;
+}
+
+.polaris-navigator-root .score-pill {
+  border: 0.5px solid rgba(180, 83, 9, 0.22);
+  background: rgba(251, 191, 36, 0.12);
+  color: #b45309;
+  font-weight: 500;
+}
+
+.polaris-navigator-root .close-button {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 0.625rem;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #475569;
+  font-weight: 500;
+}
+
+.polaris-navigator-root .close-button:hover:not(:disabled),
+.polaris-navigator-root .close-button:focus-visible:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.2);
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.polaris-navigator-root .poi-actions {
+  gap: 0.5rem;
+}
+
+.polaris-navigator-root .poi-actions .action-button {
+  height: 38px;
+  padding: 0 1rem;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+.polaris-navigator-root .poi-actions .action-button.secondary {
+  background: #ffffff;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  color: #334155;
+}
+
+.polaris-navigator-root .poi-actions .action-button.secondary:hover:not(:disabled),
+.polaris-navigator-root .poi-actions .action-button.secondary:focus-visible:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.22);
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.polaris-navigator-root .poi-actions .action-button:not(.secondary):not(.danger) {
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(249, 115, 22, 0.22);
+}
+
+.polaris-navigator-root .poi-actions .action-button:not(.secondary):not(.danger):hover:not(:disabled),
+.polaris-navigator-root .poi-actions .action-button:not(.secondary):not(.danger):focus-visible:not(:disabled) {
+  filter: brightness(1.04);
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.28);
+}
+
+.polaris-navigator-root .poi-actions .action-button.danger {
+  background: #ffffff;
+  border: 0.5px solid rgba(220, 38, 38, 0.28);
+  color: #b91c1c;
+}
+
+.polaris-navigator-root .poi-actions .action-button.danger:hover:not(:disabled),
+.polaris-navigator-root .poi-actions .action-button.danger:focus-visible:not(:disabled) {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #991b1b;
+}
+
+.polaris-navigator-root .poi-actions .action-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ----------------------------------------------------------------------------
+ * Navigator teleop pad — WASD/QE manual control under the Operators rail.
+ * -------------------------------------------------------------------------- */
+.polaris-nav-teleop-card {
+  flex: 0 0 auto;
+}
+
+.polaris-nav-teleop-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.55rem 0.6rem 0.65rem;
+}
+
+.polaris-nav-teleop-hint {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  letter-spacing: 0.005em;
+}
+
+.polaris-nav-teleop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.polaris-nav-teleop-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  padding: 0.45rem 0.4rem 0.5rem;
+  border-radius: 0.55rem;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 80ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease;
+}
+
+.polaris-nav-teleop-btn:hover:not(:disabled),
+.polaris-nav-teleop-btn:focus-visible:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.22);
+  color: #0f172a;
+  outline: none;
+}
+
+.polaris-nav-teleop-btn.is-active:not(:disabled) {
+  border-color: rgba(249, 115, 22, 0.55);
+  background: linear-gradient(165deg, #fff7ed 0%, #ffedd5 100%);
+  color: #9a3412;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.18);
+  transform: translateY(1px);
+}
+
+.polaris-nav-teleop-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.polaris-nav-teleop-glyph {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.polaris-nav-teleop-sub {
+  font-size: 0.6rem;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.polaris-nav-teleop-btn.is-active .polaris-nav-teleop-sub {
+  color: #c2410c;
+}
+
+.polaris-nav-teleop-stop {
+  height: 32px;
+  margin-top: 0.15rem;
+  border-radius: 0.55rem;
+  border: 0.5px solid rgba(220, 38, 38, 0.28);
+  background: #ffffff;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.polaris-nav-teleop-stop:hover:not(:disabled),
+.polaris-nav-teleop-stop:focus-visible:not(:disabled) {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #991b1b;
+  outline: none;
+}
+
+.polaris-nav-teleop-stop:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mode dropdown in the card header */
+.polaris-nav-teleop-mode-select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 28px;
+  padding: 0 1.7rem 0 0.6rem;
+  border-radius: 0.5rem;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M1 1l4 4 4-4'/></svg>")
+    no-repeat right 0.55rem center;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+}
+
+.polaris-nav-teleop-mode-select:hover:not(:disabled),
+.polaris-nav-teleop-mode-select:focus-visible:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.22);
+  outline: none;
+  color: #0f172a;
+}
+
+.polaris-nav-teleop-mode-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Autonomous-mode start/stop buttons */
+.polaris-nav-teleop-explore {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.polaris-nav-teleop-explore-start,
+.polaris-nav-teleop-explore-stop {
+  height: 36px;
+  border-radius: 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  transition:
+    filter 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.polaris-nav-teleop-explore-start {
+  border: none;
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(249, 115, 22, 0.22);
+}
+
+.polaris-nav-teleop-explore-start:hover:not(:disabled),
+.polaris-nav-teleop-explore-start:focus-visible:not(:disabled) {
+  filter: brightness(1.04);
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.28);
+  outline: none;
+}
+
+.polaris-nav-teleop-explore-start:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.polaris-nav-teleop-explore-stop {
+  border: 0.5px solid rgba(220, 38, 38, 0.32);
+  background: #ffffff;
+  color: #b91c1c;
+}
+
+.polaris-nav-teleop-explore-stop:hover:not(:disabled),
+.polaris-nav-teleop-explore-stop:focus-visible:not(:disabled) {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #991b1b;
+  outline: none;
+}
+
+.polaris-nav-teleop-explore-stop:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.polaris-nav-teleop-explore-status {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+/* Passive-mode info row */
+.polaris-nav-teleop-passive {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.03);
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.polaris-nav-teleop-passive-dot {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.55);
+  animation: polaris-nav-teleop-passive-pulse 1.8s ease-out infinite;
+}
+
+@keyframes polaris-nav-teleop-passive-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 0.4rem rgba(148, 163, 184, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(148, 163, 184, 0);
+  }
+}
+
+/* Toggle row at the bottom of the Control card — searchlight + obstacle-avoidance + … */
+.polaris-nav-teleop-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.polaris-nav-teleop-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  min-height: 52px;
+  border-radius: 0.55rem;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease;
+}
+
+.polaris-nav-teleop-toggle:hover:not(:disabled),
+.polaris-nav-teleop-toggle:focus-visible:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.22);
+  color: #0f172a;
+  outline: none;
+}
+
+.polaris-nav-teleop-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.polaris-nav-teleop-toggle-glyph {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.polaris-nav-teleop-toggle-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+.polaris-nav-teleop-toggle-state {
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* Searchlight ON — amber tile */
+.polaris-nav-teleop-toggle--searchlight.is-on {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 100%);
+  color: #b45309;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.18);
+}
+
+.polaris-nav-teleop-toggle--searchlight.is-on .polaris-nav-teleop-toggle-glyph {
+  color: #d97706;
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.55);
+}
+
+.polaris-nav-teleop-toggle--searchlight.is-on .polaris-nav-teleop-toggle-state {
+  color: #b45309;
+}
+
+/* Obstacle avoidance toggle — neutral tile chrome (no green/red coloring); the
+ * dual-icon switch communicates state via the shield-check ↔ shield-warning
+ * glyphs and the standard track. */
+
+/* Battery meta row in the operator card — slightly tighter than the others and dot-prefixed. */
+.polaris-operator-card-meta--battery {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Operators rail empty state — no live or create-flow operator → prompt to add. */
+.polaris-nav-operators-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem 1rem;
+}
+
+.polaris-nav-operators-empty-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.polaris-nav-operators-empty-sub {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.polaris-nav-operators-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border-radius: 0.55rem;
+  border: none;
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    filter 120ms ease,
+    box-shadow 120ms ease;
+  box-shadow: 0 6px 14px rgba(249, 115, 22, 0.22);
+}
+
+.polaris-nav-operators-empty-cta:hover,
+.polaris-nav-operators-empty-cta:focus-visible {
+  filter: brightness(1.04);
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.28);
+  outline: none;
+}
+
+/* ----------------------------------------------------------------------------
+ * `PolarisIconSwitch` — Polaris flavour of shadcn `switch-11`.
+ *
+ * Layout: [offIcon] · [track + thumb] · [onIcon]
+ *
+ * The shadcn original lives in a Tailwind v4 + shadcn registry app; this is
+ * the same UX wired into the project's plain CSS architecture (Vite +
+ * Tailwind v3 + custom classes). Keyboard, ARIA, click-to-set semantics all
+ * mirror the source.
+ * -------------------------------------------------------------------------- */
+.polaris-icon-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.polaris-icon-switch-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.polaris-icon-switch-label:hover:not(:disabled),
+.polaris-icon-switch-label:focus-visible:not(:disabled) {
+  color: #0f172a;
+  outline: none;
+}
+
+.polaris-icon-switch-label:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Inactive-side fade — matches shadcn's `group-data-[state=…]:text-muted-foreground/70` */
+.polaris-icon-switch--fade-inactive[data-state="checked"]
+  .polaris-icon-switch-label--off,
+.polaris-icon-switch--fade-inactive[data-state="unchecked"]
+  .polaris-icon-switch-label--on {
+  color: rgba(100, 116, 139, 0.55);
+}
+
+.polaris-icon-switch-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Track — shadcn switch chrome with Polaris tokens */
+.polaris-icon-switch-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 0.5px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.polaris-icon-switch-track:hover:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.22);
+}
+
+.polaris-icon-switch-track:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+.polaris-icon-switch-track[data-state="checked"] {
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  border-color: transparent;
+}
+
+.polaris-icon-switch-track:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Thumb — slides on the X axis, matches shadcn translate-x animation */
+.polaris-icon-switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: calc(1.25rem - 6px);
+  height: calc(1.25rem - 6px);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+  transform: translate3d(0, -50%, 0);
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.polaris-icon-switch-track[data-state="checked"] .polaris-icon-switch-thumb {
+  transform: translate3d(calc(2.25rem - 1.25rem), -50%, 0);
+}
+
+/* When the searchlight switch lives inside the Control card's toggle tile,
+ * keep the column layout but center the switch row underneath the label so
+ * Sun + track + Moon all fit even in narrow grid cells. */
+.polaris-nav-teleop-toggle--switch {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0.45rem;
+  cursor: default;
+}
+
+.polaris-nav-teleop-toggle--switch .polaris-icon-switch {
+  align-self: center;
+}
+
+/* ----------------------------------------------------------------------------
+ * Snapshot alert badge — Detection-log row, modelled on shadcn `alert-02`
+ * (Avatar + Title + Description + trailing icon).
+ *
+ * Maps to the project's existing CSS-class architecture (no Tailwind v4 / no
+ * shadcn registry available in this Vite + Tailwind v3 codebase). The layout
+ * mirrors the shadcn variant though:
+ *   ┌──────┐  Operator took a new snapshot for a POI @ (x, y)        ⓘ
+ *   │ avt. │  VLM · 12 mins ago · Tue 5 May, 19:02
+ *   └──────┘
+ * -------------------------------------------------------------------------- */
+.polaris-snapshot-alert {
+  display: flex;
+  align-items: center;
+  /* Even spacing — outer padding (all four sides) equals the inter-item gap. */
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 0.625rem;
+  border: 0.5px solid rgba(15, 23, 42, 0.1);
+  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.polaris-snapshot-alert:hover:not(:disabled),
+.polaris-snapshot-alert:focus-visible:not(:disabled) {
+  border-color: rgba(15, 23, 42, 0.2);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  outline: none;
+}
+
+.polaris-snapshot-alert--selected {
+  border-color: rgba(37, 99, 235, 0.4);
+  background: linear-gradient(165deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+}
+
+/* Avatar — square with rounded-sm, mirroring the shadcn alert-02 demo */
+.polaris-snapshot-alert-avatar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
+  background: rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  border: 0.5px solid rgba(15, 23, 42, 0.08);
+}
+
+.polaris-snapshot-alert-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.polaris-snapshot-alert-avatar-fallback {
+  width: 1rem;
+  height: 1rem;
+  color: #64748b;
+}
+
+.polaris-snapshot-alert-avatar--yolo {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.polaris-snapshot-alert-avatar--vlm {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+/* Body — title + description, fills the middle */
+.polaris-snapshot-alert-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.polaris-snapshot-alert-title {
+  color: #0f172a;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.polaris-snapshot-alert-title strong {
+  font-weight: 600;
+}
+
+.polaris-snapshot-alert-coords {
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.polaris-snapshot-alert-desc {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.polaris-snapshot-alert-source {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.4rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #475569;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+}
+
+.polaris-snapshot-alert--selected .polaris-snapshot-alert-source {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.polaris-snapshot-alert-dot {
+  color: #cbd5e1;
+}
+
+.polaris-snapshot-alert-rel {
+  color: #475569;
+  font-weight: 500;
+}
+
+.polaris-snapshot-alert-abs {
+  color: #94a3b8;
+}
+
+/* Trailing icon — matches the CircleAlertIcon position in shadcn alert-02 */
+.polaris-snapshot-alert-icon {
+  flex: 0 0 auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: #94a3b8;
+  transition: color 120ms ease;
+}
+
+.polaris-snapshot-alert:hover .polaris-snapshot-alert-icon,
+.polaris-snapshot-alert:focus-visible .polaris-snapshot-alert-icon {
+  color: #475569;
+}
+
+.polaris-snapshot-alert--selected .polaris-snapshot-alert-icon {
+  color: #1d4ed8;
+}
+
+/* Trim the Orchestrator card so the sidebar isn't dominated by chat — cap at ~30vh
+ * with internal scroll. The teleop card sets the cadence; Orchestrator is reference. */
+@media (min-width: 960px) {
+  .polaris-navigator-map
+    .polaris-navigator-operations-inner.polaris-navigator-operations-body {
+    grid-template-rows: auto auto minmax(0, 0.85fr);
+  }
+
+  .polaris-navigator-operations-inner > .polaris-nav-option-card--grow {
+    max-height: 32vh;
+  }
 }
